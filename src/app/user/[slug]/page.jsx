@@ -3,9 +3,12 @@ import React from "react";
 
 const page = async ({ params }) => {
   const getall = async () => {
-    const res = await fetch("http://localhost:3050/api/v1/getall", {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      "https://prod2.thesuitchstaging.com:3050/api/v1/getall",
+      {
+        cache: "no-store",
+      }
+    );
     return res.json();
   };
 
