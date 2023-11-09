@@ -1,16 +1,28 @@
 import React, { useEffect, useState, useRef } from "react";
 import { socket } from "../../lib/socket";
 import Link from "next/link";
-import { BiCheckDouble } from "react-icons/bi";
+import { BiCheckDouble, BiEditAlt } from "react-icons/bi";
+import { MdOutlineDeleteForever } from "react-icons/md";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const Chats = (props) => {
+  const url = "http://localhost:3050";
+  // ${url}
   const { sender, receiver } = props;
-  const [msg, setMsg] = useState("");
+  const [typingMsg, setTypingMsg] = useState("");
   const [messages, setMessages] = useState([]);
   const [typer, setTyper] = useState();
   const [room, setRoom] = useState();
   const [uSender, setuSender] = useState("");
   const [uReceiver, setuReceiver] = useState("");
+  const [edit, setEdit] = useState("");
   const messagesEndRef = useRef(null);
   const scrollToBottom = () => {
     messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -22,8 +34,6 @@ const Chats = (props) => {
         scrollToBottom();
       }, 500);
       messages.forEach((message) => {
-        console.log(messages);
-        console.log(sender);
         if (message.isSeen === false && message.receiver === sender) {
           socket.emit("update_seen_message", message);
         }
@@ -33,60 +43,59 @@ const Chats = (props) => {
   }, []);
 
   useEffect(() => {
-    const Rooming = async () => {
-      const getroom = async () => {
-        const res = await fetch(
-          "https://prod2.thesuitchstaging.com:2083/api/v1/room",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              sender: sender,
-              receiver: receiver,
-            }),
-          }
-        );
-        return res.json();
-      };
-      const room = await getroom();
-      setRoom(room.data._id);
+    const fetchRoomData = async () => {
+      const roomRes = await fetch(`${url}/api/v1/room`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sender: sender,
+          receiver: receiver,
+        }),
+      });
+      const roomData = await roomRes.json();
+      const roomId = roomData.data._id;
+      setRoom(roomId);
 
-      const getnames = async () => {
-        const res = await fetch(
-          "https://prod2.thesuitchstaging.com:2083/api/v1/getsenderreceiver",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              roomId: room.data._id,
-            }),
-          }
-        );
-        return res.json();
+      const getNames = async () => {
+        const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roomId: roomId,
+          }),
+        });
+        return namesRes.json();
       };
 
-      const names = await getnames();
-      if (names.data.sender._id === sender) {
-        setuSender(names.data.sender.username);
-        setuReceiver(names.data.receiver.username);
+      const namesData = await getNames();
+      const senderId = namesData.data.sender._id;
+      const receiverId = namesData.data.receiver._id;
+      const senderUsername = namesData.data.sender.username;
+      const receiverUsername = namesData.data.receiver.username;
+
+      if (senderId === sender) {
+        setuSender(senderUsername);
+        setuReceiver(receiverUsername);
       } else {
-        setuReceiver(names.data.sender.username);
-        setuSender(names.data.receiver.username);
+        setuReceiver(senderUsername);
+        setuSender(receiverUsername);
       }
-      socket.emit("join_room", room.data._id);
+
+      socket.emit("join_room", roomId);
     };
-    Rooming();
+
+    fetchRoomData();
 
     return () => socket.off("join_room");
   }, []);
 
   useEffect(() => {
     socket.on("user_typing", (res) => {
-      setMsg(`${res} is typping`);
+      setTypingMsg(`${res} is typping`);
       setTyper(res);
       return () => socket.off("user_typing");
     });
@@ -94,7 +103,7 @@ const Chats = (props) => {
 
   useEffect(() => {
     socket.on("stop_typing", () => {
-      setMsg("");
+      setTypingMsg("");
       return () => socket.off("stop_typing");
     });
   }, []);
@@ -119,6 +128,18 @@ const Chats = (props) => {
     }
   };
 
+  const handleDelete = (e, msgId) => {
+    e.preventDefault();
+    socket.emit("delete_msg", msgId, room);
+  };
+
+  const handleEdit = (e, msgId) => {
+    // e.preventDefault();
+    if (edit !== "") {
+      socket.emit("edit_msg", msgId, room, edit);
+    }
+  };
+
   return (
     <div>
       <div className="max-w-lg mx-auto mt-10">
@@ -132,28 +153,90 @@ const Chats = (props) => {
           <h1 className="flex justify-center mt-2">MESSAGES</h1>
           <div className="h-96 overflow-auto">
             <ul className="space-y-2 ">
-              {messages.map((e) => (
+              {messages.map((msg) => (
                 <li
-                  key={e._id}
-                  className={`rounded-md p-2 ml-4 mr-4 flex gap-x-2 items-end ${
-                    sender === e.sender
+                  key={msg._id}
+                  className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
+                    sender === msg.sender
                       ? "text-left bg-blue-200 text-black"
                       : "text-right bg-stone-300 text-black"
                   }`}
                 >
-                  {e.attachment && (
-                    <Fileviewer
-                      sender={sender}
-                      type={e.sender}
-                      tag={e.attachment}
-                    />
-                  )}
+                  {!msg.isDeleted ? (
+                    <>
+                      <div>
+                        {msg.attachment && (
+                          <Fileviewer
+                            sender={sender}
+                            type={msg.sender}
+                            tag={msg.attachment}
+                          />
+                        )}
+                        {msg.text}
+                      </div>
+                      <div className="flex gap-x-2">
+                        {msg.isEdited ? (
+                          <p className="text-green-800 text-xs flex items-end">
+                            Edited
+                          </p>
+                        ) : (
+                          <></>
+                        )}
+                        {msg.isSeen === true ? (
+                          <BiCheckDouble size={20} className="text-blue-500" />
+                        ) : (
+                          <BiCheckDouble size={20} />
+                        )}
+                        {msg.sender == sender && (
+                          <>
+                            {/* ......... */}
+                            <Dialog>
+                              <DialogTrigger>
+                                <BiEditAlt
+                                  size={20}
+                                  className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                                />{" "}
+                              </DialogTrigger>
+                              <DialogContent className="bg-gray-700/90">
+                                <DialogHeader>
+                                  <DialogTitle className=" p-2 text-sm">
+                                    {msg.text}
+                                  </DialogTitle>
+                                  <DialogDescription>
+                                    <input
+                                      value={edit}
+                                      onChange={(e) => setEdit(e.target.value)}
+                                      className="p-2 w-full text-black rounded-md"
+                                      placeholder="Enter text here to edit"
+                                    />
+                                  </DialogDescription>
+                                </DialogHeader>
+                                <button
+                                  onClick={(e) => handleEdit(e, msg._id)}
+                                  className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
+                                >
+                                  submit
+                                </button>
+                              </DialogContent>
+                            </Dialog>
 
-                  {e.text}
-                  {e.isSeen === true ? (
-                    <BiCheckDouble className="text-blue-500" />
+                            {/* ......... */}
+                            {/* <BiEditAlt
+                              onClick={(e) => handleEdit(e)}
+                              size={20}
+                              className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                            /> */}
+                            <MdOutlineDeleteForever
+                              size={20}
+                              className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
+                              onClick={(e) => handleDelete(e, msg._id)}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </>
                   ) : (
-                    <BiCheckDouble />
+                    <p className="text-red-800">This Message is Deleted</p>
                   )}
                 </li>
               ))}
@@ -167,7 +250,7 @@ const Chats = (props) => {
           className="flex justify-center"
         >
           <div className=" bottom-10">
-            <h1>{typer === uSender ? "" : msg}</h1>
+            <h1>{typer === uSender ? "" : typingMsg}</h1>
             <div className="space-x-4">
               <input
                 className="text-black rounded-md mt-2"
@@ -209,7 +292,8 @@ export default Chats;
 
 const Fileviewer = (props) => {
   const { tag, type, sender } = props;
-  console.log(tag);
+
+  const url = "http://localhost:3050";
   return (
     <>
       {/* ${sender === type ? "justify-end " : "text-right"}` */}
@@ -220,14 +304,11 @@ const Fileviewer = (props) => {
       tag.fileType === "image/bmp" ||
       tag.fileType === "image/tiff" ||
       tag.fileType === "image/webp" ? (
-        <img
-          className={``}
-          src={`https://prod2.thesuitchstaging.com:3050/${tag.fileName}`}
-        />
+        <img className={``} src={`${url}/${tag.fileName}`} />
       ) : (
         <Link
           className="text-blue-600 underline"
-          href={`https://prod2.thesuitchstaging.com:3050/${tag.fileName}`}
+          href={`${url}/${tag.fileName}`}
           target="_blank"
         >
           {tag.fileName}
