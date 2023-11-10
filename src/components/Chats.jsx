@@ -1,3 +1,4 @@
+"use client";
 import React, { useEffect, useState, useRef } from "react";
 import { socket } from "../../lib/socket";
 import Link from "next/link";
@@ -14,7 +15,6 @@ import {
 
 const Chats = (props) => {
   const url = "http://localhost:3050";
-  // ${url}
   const { sender, receiver } = props;
   const [typingMsg, setTypingMsg] = useState("");
   const [messages, setMessages] = useState([]);
@@ -30,6 +30,8 @@ const Chats = (props) => {
   useEffect(() => {
     socket.on("update_messages", (messages) => {
       setMessages(messages);
+      console.log("messages");
+      console.log(messages);
       setTimeout(() => {
         scrollToBottom();
       }, 500);
@@ -61,6 +63,7 @@ const Chats = (props) => {
       const getNames = async () => {
         const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
           method: "POST",
+          cache: "no-cache",
           headers: {
             "Content-Type": "application/json",
           },
@@ -72,6 +75,7 @@ const Chats = (props) => {
       };
 
       const namesData = await getNames();
+
       const senderId = namesData.data.sender._id;
       const receiverId = namesData.data.receiver._id;
       const senderUsername = namesData.data.sender.username;
@@ -91,7 +95,7 @@ const Chats = (props) => {
     fetchRoomData();
 
     return () => socket.off("join_room");
-  }, []);
+  }, [receiver]);
 
   useEffect(() => {
     socket.on("user_typing", (res) => {
@@ -142,104 +146,223 @@ const Chats = (props) => {
 
   return (
     <div>
-      <div className="max-w-lg mx-auto mt-10">
+      <div className=" mt-10">
         <div className="flex justify-between">
-          <h1>UserName: {uSender}</h1>
-          <h1>Send To: {uReceiver}</h1>
+          <h1 className="capitalize">UserName: {uSender}</h1>
+          <h1 className="capitalize">Send To: {uReceiver}</h1>
         </div>
         <hr />
 
         <div>
-          <h1 className="flex justify-center mt-2">MESSAGES</h1>
+          {sender === receiver ? (
+            <h1 className="flex justify-center mt-2">Talk to yourself</h1>
+          ) : (
+            <h1 className="flex justify-center mt-2 mb-2">MESSAGES</h1>
+          )}
           <div className="h-96 overflow-auto">
             <ul className="space-y-2 ">
-              {messages.map((msg) => (
-                <li
-                  key={msg._id}
-                  className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
-                    sender === msg.sender
-                      ? "text-left bg-blue-200 text-black"
-                      : "text-right bg-stone-300 text-black"
-                  }`}
-                >
-                  {!msg.isDeleted ? (
+              {messages.map(
+                (msg) =>
+                  msg.deletedByUser2 || msg.deletedByUser1 === sender ? (
+                    <></>
+                  ) : (
                     <>
-                      <div>
-                        {msg.attachment && (
-                          <Fileviewer
-                            sender={sender}
-                            type={msg.sender}
-                            tag={msg.attachment}
-                          />
-                        )}
-                        {msg.text}
-                      </div>
-                      <div className="flex gap-x-2">
-                        {msg.isEdited ? (
-                          <p className="text-green-800 text-xs flex items-end">
-                            Edited
-                          </p>
-                        ) : (
-                          <></>
-                        )}
-                        {msg.isSeen === true ? (
-                          <BiCheckDouble size={20} className="text-blue-500" />
-                        ) : (
-                          <BiCheckDouble size={20} />
-                        )}
-                        {msg.sender == sender && (
+                      <li
+                        key={msg._id}
+                        className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
+                          sender === msg.sender
+                            ? "text-left bg-blue-200 text-black"
+                            : "text-right bg-stone-300 text-black"
+                        }`}
+                      >
+                        {!msg.isDeleted ? (
                           <>
-                            {/* ......... */}
-                            <Dialog>
-                              <DialogTrigger>
-                                <BiEditAlt
+                            <div className="">
+                              {msg.attachment && (
+                                <Fileviewer
+                                  sender={sender}
+                                  type={msg.sender}
+                                  tag={msg.attachment}
+                                />
+                              )}
+                              {msg.attachment ? (
+                                msg.text ? (
+                                  msg.text
+                                ) : (
+                                  <br />
+                                )
+                              ) : (
+                                msg.text
+                              )}
+                            </div>
+                            <div className="flex gap-x-2">
+                              {msg.isEdited ? (
+                                <p className="text-green-800 text-xs flex items-end">
+                                  Edited
+                                </p>
+                              ) : (
+                                <></>
+                              )}
+                              {msg.isSeen === true ? (
+                                <BiCheckDouble
                                   size={20}
-                                  className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
-                                />{" "}
-                              </DialogTrigger>
-                              <DialogContent className="bg-gray-700/90">
-                                <DialogHeader>
-                                  <DialogTitle className=" p-2 text-sm">
-                                    {msg.text}
-                                  </DialogTitle>
-                                  <DialogDescription>
-                                    <input
-                                      value={edit}
-                                      onChange={(e) => setEdit(e.target.value)}
-                                      className="p-2 w-full text-black rounded-md"
-                                      placeholder="Enter text here to edit"
-                                    />
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <button
-                                  onClick={(e) => handleEdit(e, msg._id)}
-                                  className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
-                                >
-                                  submit
-                                </button>
-                              </DialogContent>
-                            </Dialog>
+                                  className="text-blue-500"
+                                />
+                              ) : (
+                                <BiCheckDouble size={20} />
+                              )}
+                              {msg.sender == sender && (
+                                <>
+                                  {/* ......... */}
+                                  <Dialog>
+                                    <DialogTrigger>
+                                      <BiEditAlt
+                                        size={20}
+                                        className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                                      />{" "}
+                                    </DialogTrigger>
+                                    <DialogContent className="bg-gray-700/90">
+                                      <DialogHeader>
+                                        <DialogTitle className=" p-2 text-sm">
+                                          {msg.text}
+                                        </DialogTitle>
+                                        <DialogDescription>
+                                          <input
+                                            value={edit}
+                                            onChange={(e) =>
+                                              setEdit(e.target.value)
+                                            }
+                                            className="p-2 w-full text-black rounded-md"
+                                            placeholder="Enter text here to edit"
+                                          />
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <button
+                                        onClick={(e) => handleEdit(e, msg._id)}
+                                        className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
+                                      >
+                                        submit
+                                      </button>
+                                    </DialogContent>
+                                  </Dialog>
 
-                            {/* ......... */}
-                            {/* <BiEditAlt
+                                  {/* ......... */}
+                                  {/* <BiEditAlt
                               onClick={(e) => handleEdit(e)}
                               size={20}
                               className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
                             /> */}
-                            <MdOutlineDeleteForever
-                              size={20}
-                              className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
-                              onClick={(e) => handleDelete(e, msg._id)}
-                            />
+                                  <MdOutlineDeleteForever
+                                    size={20}
+                                    className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
+                                    onClick={(e) => handleDelete(e, msg._id)}
+                                  />
+                                </>
+                              )}
+                            </div>
                           </>
+                        ) : (
+                          <p className="text-red-800">
+                            This Message is Deleted
+                          </p>
                         )}
-                      </div>
+                      </li>
                     </>
-                  ) : (
-                    <p className="text-red-800">This Message is Deleted</p>
-                  )}
-                </li>
-              ))}
+                  )
+                // <li
+                //   key={msg._id}
+                //   className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
+                //     sender === msg.sender
+                //       ? "text-left bg-blue-200 text-black"
+                //       : "text-right bg-stone-300 text-black"
+                //   }`}
+                // >
+                //   {!msg.isDeleted ? (
+                //     <>
+                //       <div className="">
+                //         {msg.attachment && (
+                //           <Fileviewer
+                //             sender={sender}
+                //             type={msg.sender}
+                //             tag={msg.attachment}
+                //           />
+                //         )}
+                //         {msg.attachment ? (
+                //           msg.text ? (
+                //             msg.text
+                //           ) : (
+                //             <br />
+                //           )
+                //         ) : (
+                //           msg.text
+                //         )}
+                //       </div>
+                //       <div className="flex gap-x-2">
+                //         {msg.isEdited ? (
+                //           <p className="text-green-800 text-xs flex items-end">
+                //             Edited
+                //           </p>
+                //         ) : (
+                //           <></>
+                //         )}
+                //         {msg.isSeen === true ? (
+                //           <BiCheckDouble size={20} className="text-blue-500" />
+                //         ) : (
+                //           <BiCheckDouble size={20} />
+                //         )}
+                //         {msg.sender == sender && (
+                //           <>
+                //             {/* ......... */}
+                //             <Dialog>
+                //               <DialogTrigger>
+                //                 <BiEditAlt
+                //                   size={20}
+                //                   className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                //                 />{" "}
+                //               </DialogTrigger>
+                //               <DialogContent className="bg-gray-700/90">
+                //                 <DialogHeader>
+                //                   <DialogTitle className=" p-2 text-sm">
+                //                     {msg.text}
+                //                   </DialogTitle>
+                //                   <DialogDescription>
+                //                     <input
+                //                       value={edit}
+                //                       onChange={(e) => setEdit(e.target.value)}
+                //                       className="p-2 w-full text-black rounded-md"
+                //                       placeholder="Enter text here to edit"
+                //                     />
+                //                   </DialogDescription>
+                //                 </DialogHeader>
+                //                 <button
+                //                   onClick={(e) => handleEdit(e, msg._id)}
+                //                   className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
+                //                 >
+                //                   submit
+                //                 </button>
+                //               </DialogContent>
+                //             </Dialog>
+
+                //             {/* ......... */}
+                //             {/* <BiEditAlt
+                //               onClick={(e) => handleEdit(e)}
+                //               size={20}
+                //               className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                //             /> */}
+                //             <MdOutlineDeleteForever
+                //               size={20}
+                //               className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
+                //               onClick={(e) => handleDelete(e, msg._id)}
+                //             />
+                //           </>
+                //         )}
+                //       </div>
+                //     </>
+                //   ) : (
+                //     <p className="text-red-800">This Message is Deleted</p>
+                //   )}
+                // </li>
+              )}
               <div ref={messagesEndRef} />
             </ul>
           </div>
