@@ -17,7 +17,7 @@ const Fulldel = ({ username, me, other }) => {
   useEffect(() => {
     const fetchRoomData = async () => {
       try {
-        const url = "http://localhost:3050";
+        const url = "https://chatsocket.thesuitchstaging.com:3050";
         const roomRes = await fetch(`${url}/api/v1/room`, {
           method: "POST",
           headers: {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 
 const Chats = (props) => {
-  const url = "http://localhost:3050";
+  const url = "https://chatsocket.thesuitchstaging.com:3050";
   const { sender, receiver } = props;
   const [typingMsg, setTypingMsg] = useState("");
   const [messages, setMessages] = useState([]);
@@ -134,13 +134,37 @@ const Chats = (props) => {
 
   const handleDelete = (e, msgId) => {
     e.preventDefault();
-    socket.emit("delete_msg", msgId, room);
+    socket.emit("delete_msg", { messageId: msgId, room: room });
   };
 
   const handleEdit = (e, msgId) => {
     // e.preventDefault();
     if (edit !== "") {
-      socket.emit("edit_msg", msgId, room, edit);
+      socket.on("edit_msg", async (messageId, room, txt) => {
+        let MegData = await messageModel.findOneAndUpdate(
+          { _id: messageId },
+          { text: txt, isEdited: true }
+        );
+        if (MegData) {
+          let foundRoomData = await roomModel
+            .findOne({
+              _id: room,
+            })
+            .populate({
+              path: "messages",
+              populate: {
+                path: "attachment",
+                model: "fileUpload",
+              },
+            });
+
+          io.in(room.toString()).emit(
+            "update_messages",
+            foundRoomData.messages
+          );
+        }
+      });
+      socket.emit("edit_msg", { messageId: msgId, room: room, txt: edit });
     }
   };
 
@@ -148,7 +172,6 @@ const Chats = (props) => {
     <div>
       <div className=" mt-10">
         <div className="flex justify-between">
-          <h1 className="capitalize">UserName: {uSender}</h1>
           <h1 className="capitalize">Send To: {uReceiver}</h1>
         </div>
         <hr />
@@ -159,19 +182,26 @@ const Chats = (props) => {
           ) : (
             <h1 className="flex justify-center mt-2 mb-2">MESSAGES</h1>
           )}
-          <div className="h-96 overflow-auto">
+          <div className="h-96 overflow-auto overflow-x-hidden">
             <ul className="space-y-2 ">
               {messages.map(
                 (msg) =>
                   msg.deletedByUser2 || msg.deletedByUser1 === sender ? (
                     <></>
                   ) : (
-                    <>
+                    <div
+                      key={msg._id}
+                      style={
+                        sender === msg.sender
+                          ? { justifyContent: "end" }
+                          : { justifyContent: "start" }
+                      }
+                      className="flex"
+                    >
                       <li
-                        key={msg._id}
-                        className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
+                        className={`rounded-md p-2 ml-4 mr-4 flex items-end gap-x-4 ${
                           sender === msg.sender
-                            ? "text-left bg-blue-200 text-black"
+                            ? "text-left right-0  bg-blue-200 text-black justify-end"
                             : "text-right bg-stone-300 text-black"
                         }`}
                       >
@@ -267,7 +297,7 @@ const Chats = (props) => {
                           </p>
                         )}
                       </li>
-                    </>
+                    </div>
                   )
                 // <li
                 //   key={msg._id}
@@ -374,7 +404,7 @@ const Chats = (props) => {
         >
           <div className=" bottom-10">
             <h1>{typer === uSender ? "" : typingMsg}</h1>
-            <div className="space-x-4">
+            <div className="space-x-4 space-y-4 md:space-y-0">
               <input
                 className="text-black rounded-md mt-2"
                 name="message"
@@ -416,7 +446,7 @@ export default Chats;
 const Fileviewer = (props) => {
   const { tag, type, sender } = props;
 
-  const url = "http://localhost:3050";
+  const url = "https://chatsocket.thesuitchstaging.com:3050";
   return (
     <>
       {/* ${sender === type ? "justify-end " : "text-right"}` */}
