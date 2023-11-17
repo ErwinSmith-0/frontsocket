@@ -44,58 +44,54 @@ const Chats = (props) => {
     return () => socket.off("update_messages");
   }, []);
 
-  useEffect(() => {
-    const fetchRoomData = async () => {
-      const roomRes = await fetch(`${url}/api/v1/room`, {
+  const fetchRoomData = async () => {
+    const roomRes = await fetch(`${url}/api/v1/room`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        sender: sender,
+        receiver: receiver,
+      }),
+    });
+    const roomData = await roomRes.json();
+    const roomId = roomData.data._id;
+    setRoom(roomId);
+
+    const getNames = async () => {
+      const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
         method: "POST",
+        cache: "no-cache",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sender: sender,
-          receiver: receiver,
+          roomId: roomId,
         }),
       });
-      const roomData = await roomRes.json();
-      const roomId = roomData.data._id;
-      setRoom(roomId);
-
-      const getNames = async () => {
-        const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
-          method: "POST",
-          cache: "no-cache",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            roomId: roomId,
-          }),
-        });
-        return namesRes.json();
-      };
-
-      const namesData = await getNames();
-
-      const senderId = namesData.data.sender._id;
-      const receiverId = namesData.data.receiver._id;
-      const senderUsername = namesData.data.sender.username;
-      const receiverUsername = namesData.data.receiver.username;
-
-      if (senderId === sender) {
-        setuSender(senderUsername);
-        setuReceiver(receiverUsername);
-      } else {
-        setuReceiver(senderUsername);
-        setuSender(receiverUsername);
-      }
-
-      socket.emit("join_room", roomId);
+      return namesRes.json();
     };
 
-    fetchRoomData();
+    const namesData = await getNames();
 
-    return () => socket.off("join_room");
-  }, [receiver]);
+    const senderId = namesData.data.sender._id;
+    const receiverId = namesData.data.receiver._id;
+    const senderUsername = namesData.data.sender.username;
+    const receiverUsername = namesData.data.receiver.username;
+
+    if (senderId === sender) {
+      setuSender(senderUsername);
+      setuReceiver(receiverUsername);
+    } else {
+      setuReceiver(senderUsername);
+      setuSender(receiverUsername);
+    }
+
+    socket.emit("join_room", roomId);
+  };
+
+  fetchRoomData();
 
   useEffect(() => {
     socket.on("user_typing", (res) => {
@@ -128,7 +124,6 @@ const Chats = (props) => {
     };
     if (data.attachment.fileName !== "" || data.text !== "") {
       socket.emit("send_message", data);
-      formData.delete("attachment");
     }
   };
 
@@ -140,30 +135,32 @@ const Chats = (props) => {
   const handleEdit = (e, msgId) => {
     // e.preventDefault();
     if (edit !== "") {
-      socket.on("edit_msg", async (messageId, room, txt) => {
-        let MegData = await messageModel.findOneAndUpdate(
-          { _id: messageId },
-          { text: txt, isEdited: true }
-        );
-        if (MegData) {
-          let foundRoomData = await roomModel
-            .findOne({
-              _id: room,
-            })
-            .populate({
-              path: "messages",
-              populate: {
-                path: "attachment",
-                model: "fileUpload",
-              },
-            });
+      // socket.on("edit_msg", async (messageId, room, txt) => {
+      //   console.log("messageId");
+      //   console.log(messageId);
+      //   let MegData = await messageModel.findOneAndUpdate(
+      //     { _id: messageId },
+      //     { text: txt, isEdited: true }
+      //   );
+      //   if (MegData) {
+      //     let foundRoomData = await roomModel
+      //       .findOne({
+      //         _id: room,
+      //       })
+      //       .populate({
+      //         path: "messages",
+      //         populate: {
+      //           path: "attachment",
+      //           model: "fileUpload",
+      //         },
+      //       });
 
-          io.in(room.toString()).emit(
-            "update_messages",
-            foundRoomData.messages
-          );
-        }
-      });
+      //     io.in(room.toString()).emit(
+      //       "update_messages",
+      //       foundRoomData.messages
+      //     );
+      //   }
+      // });
       socket.emit("edit_msg", { messageId: msgId, room: room, txt: edit });
     }
   };
@@ -182,216 +179,114 @@ const Chats = (props) => {
           ) : (
             <h1 className="flex justify-center mt-2 mb-2">MESSAGES</h1>
           )}
-          <div className="h-96 overflow-auto overflow-x-hidden">
+          <div className="h-[65vh] overflow-auto overflow-x-hidden">
             <ul className="space-y-2 ">
-              {messages.map(
-                (msg) =>
-                  msg.deletedByUser2 || msg.deletedByUser1 === sender ? (
-                    <></>
-                  ) : (
-                    <div
-                      key={msg._id}
-                      style={
+              {messages.map((msg) =>
+                msg.deletedByUser2 || msg.deletedByUser1 === sender ? (
+                  <React.Fragment key={msg._id}></React.Fragment>
+                ) : (
+                  <div
+                    key={msg._id}
+                    style={
+                      sender === msg.sender
+                        ? { justifyContent: "end" }
+                        : { justifyContent: "start" }
+                    }
+                    className="flex"
+                  >
+                    <li
+                      className={`rounded-md p-2 ml-4 mr-4 flex items-end gap-x-4 ${
                         sender === msg.sender
-                          ? { justifyContent: "end" }
-                          : { justifyContent: "start" }
-                      }
-                      className="flex"
+                          ? "text-left right-0  bg-blue-200 text-black justify-end"
+                          : "text-right bg-stone-300 text-black"
+                      }`}
                     >
-                      <li
-                        className={`rounded-md p-2 ml-4 mr-4 flex items-end gap-x-4 ${
-                          sender === msg.sender
-                            ? "text-left right-0  bg-blue-200 text-black justify-end"
-                            : "text-right bg-stone-300 text-black"
-                        }`}
-                      >
-                        {!msg.isDeleted ? (
-                          <>
-                            <div className="">
-                              {msg.attachment && (
-                                <Fileviewer
-                                  sender={sender}
-                                  type={msg.sender}
-                                  tag={msg.attachment}
-                                />
-                              )}
-                              {msg.attachment ? (
-                                msg.text ? (
-                                  msg.text
-                                ) : (
-                                  <br />
-                                )
-                              ) : (
+                      {!msg.isDeleted ? (
+                        <>
+                          <div className="">
+                            {msg.attachment && (
+                              <Fileviewer
+                                sender={sender}
+                                type={msg.sender}
+                                tag={msg.attachment}
+                              />
+                            )}
+                            {msg.attachment ? (
+                              msg.text ? (
                                 msg.text
-                              )}
-                            </div>
-                            <div className="flex gap-x-2">
-                              {msg.isEdited ? (
-                                <p className="text-green-800 text-xs flex items-end">
-                                  Edited
-                                </p>
                               ) : (
-                                <></>
-                              )}
-                              {msg.isSeen === true ? (
-                                <BiCheckDouble
+                                <br />
+                              )
+                            ) : (
+                              msg.text
+                            )}
+                          </div>
+                          <div className="flex gap-x-2">
+                            {msg.isEdited ? (
+                              <p className="text-green-800 text-xs flex items-end">
+                                Edited
+                              </p>
+                            ) : (
+                              <></>
+                            )}
+                            {msg.isSeen === true ? (
+                              <BiCheckDouble
+                                size={20}
+                                className="text-blue-500"
+                              />
+                            ) : (
+                              <BiCheckDouble size={20} />
+                            )}
+                            {msg.sender == sender && (
+                              <>
+                                {/* ......... */}
+                                <Dialog>
+                                  <DialogTrigger>
+                                    <BiEditAlt
+                                      size={20}
+                                      className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
+                                    />{" "}
+                                  </DialogTrigger>
+                                  <DialogContent className="bg-gray-700/90">
+                                    <DialogHeader>
+                                      <DialogTitle className=" p-2 text-sm">
+                                        {msg.text}
+                                      </DialogTitle>
+                                      <DialogDescription>
+                                        <input
+                                          value={edit}
+                                          onChange={(e) =>
+                                            setEdit(e.target.value)
+                                          }
+                                          className="p-2 w-full text-black rounded-md"
+                                          placeholder="Enter text here to edit"
+                                        />
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <button
+                                      onClick={(e) => handleEdit(e, msg._id)}
+                                      className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
+                                    >
+                                      submit
+                                    </button>
+                                  </DialogContent>
+                                </Dialog>
+
+                                <MdOutlineDeleteForever
                                   size={20}
-                                  className="text-blue-500"
+                                  className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
+                                  onClick={(e) => handleDelete(e, msg._id)}
                                 />
-                              ) : (
-                                <BiCheckDouble size={20} />
-                              )}
-                              {msg.sender == sender && (
-                                <>
-                                  {/* ......... */}
-                                  <Dialog>
-                                    <DialogTrigger>
-                                      <BiEditAlt
-                                        size={20}
-                                        className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
-                                      />{" "}
-                                    </DialogTrigger>
-                                    <DialogContent className="bg-gray-700/90">
-                                      <DialogHeader>
-                                        <DialogTitle className=" p-2 text-sm">
-                                          {msg.text}
-                                        </DialogTitle>
-                                        <DialogDescription>
-                                          <input
-                                            value={edit}
-                                            onChange={(e) =>
-                                              setEdit(e.target.value)
-                                            }
-                                            className="p-2 w-full text-black rounded-md"
-                                            placeholder="Enter text here to edit"
-                                          />
-                                        </DialogDescription>
-                                      </DialogHeader>
-                                      <button
-                                        onClick={(e) => handleEdit(e, msg._id)}
-                                        className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
-                                      >
-                                        submit
-                                      </button>
-                                    </DialogContent>
-                                  </Dialog>
-
-                                  {/* ......... */}
-                                  {/* <BiEditAlt
-                              onClick={(e) => handleEdit(e)}
-                              size={20}
-                              className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
-                            /> */}
-                                  <MdOutlineDeleteForever
-                                    size={20}
-                                    className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
-                                    onClick={(e) => handleDelete(e, msg._id)}
-                                  />
-                                </>
-                              )}
-                            </div>
-                          </>
-                        ) : (
-                          <p className="text-red-800">
-                            This Message is Deleted
-                          </p>
-                        )}
-                      </li>
-                    </div>
-                  )
-                // <li
-                //   key={msg._id}
-                //   className={`rounded-md p-2 ml-4 mr-4 flex justify-between items-end ${
-                //     sender === msg.sender
-                //       ? "text-left bg-blue-200 text-black"
-                //       : "text-right bg-stone-300 text-black"
-                //   }`}
-                // >
-                //   {!msg.isDeleted ? (
-                //     <>
-                //       <div className="">
-                //         {msg.attachment && (
-                //           <Fileviewer
-                //             sender={sender}
-                //             type={msg.sender}
-                //             tag={msg.attachment}
-                //           />
-                //         )}
-                //         {msg.attachment ? (
-                //           msg.text ? (
-                //             msg.text
-                //           ) : (
-                //             <br />
-                //           )
-                //         ) : (
-                //           msg.text
-                //         )}
-                //       </div>
-                //       <div className="flex gap-x-2">
-                //         {msg.isEdited ? (
-                //           <p className="text-green-800 text-xs flex items-end">
-                //             Edited
-                //           </p>
-                //         ) : (
-                //           <></>
-                //         )}
-                //         {msg.isSeen === true ? (
-                //           <BiCheckDouble size={20} className="text-blue-500" />
-                //         ) : (
-                //           <BiCheckDouble size={20} />
-                //         )}
-                //         {msg.sender == sender && (
-                //           <>
-                //             {/* ......... */}
-                //             <Dialog>
-                //               <DialogTrigger>
-                //                 <BiEditAlt
-                //                   size={20}
-                //                   className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
-                //                 />{" "}
-                //               </DialogTrigger>
-                //               <DialogContent className="bg-gray-700/90">
-                //                 <DialogHeader>
-                //                   <DialogTitle className=" p-2 text-sm">
-                //                     {msg.text}
-                //                   </DialogTitle>
-                //                   <DialogDescription>
-                //                     <input
-                //                       value={edit}
-                //                       onChange={(e) => setEdit(e.target.value)}
-                //                       className="p-2 w-full text-black rounded-md"
-                //                       placeholder="Enter text here to edit"
-                //                     />
-                //                   </DialogDescription>
-                //                 </DialogHeader>
-                //                 <button
-                //                   onClick={(e) => handleEdit(e, msg._id)}
-                //                   className="bg-blue-500 rounded-md p-1.5 hover:scale-105 duration-300"
-                //                 >
-                //                   submit
-                //                 </button>
-                //               </DialogContent>
-                //             </Dialog>
-
-                //             {/* ......... */}
-                //             {/* <BiEditAlt
-                //               onClick={(e) => handleEdit(e)}
-                //               size={20}
-                //               className=" text-blue-900 hover:scale-125 hover:bg-white/50 rounded-md duration-300"
-                //             /> */}
-                //             <MdOutlineDeleteForever
-                //               size={20}
-                //               className="text-red-800  hover:scale-125 hover:bg-white/50 rounded-md  duration-300"
-                //               onClick={(e) => handleDelete(e, msg._id)}
-                //             />
-                //           </>
-                //         )}
-                //       </div>
-                //     </>
-                //   ) : (
-                //     <p className="text-red-800">This Message is Deleted</p>
-                //   )}
-                // </li>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-red-800">This Message is Deleted</p>
+                      )}
+                    </li>
+                  </div>
+                )
               )}
               <div ref={messagesEndRef} />
             </ul>
@@ -410,7 +305,7 @@ const Chats = (props) => {
                 name="message"
                 type="text"
                 onKeyPress={() => {
-                  socket.emit("typing", room, uSender);
+                  socket.emit("typing", { roomId: room, typer: uSender });
                 }}
                 onBlur={() => {
                   socket.emit("nottyping", room);
@@ -446,7 +341,9 @@ export default Chats;
 const Fileviewer = (props) => {
   const { tag, type, sender } = props;
 
-  const url = "https://chatsocket.thesuitchstaging.com:3050";
+  const url = "https://chatsocket.thesuitchstaging.com/sio/Uploads";
+  // const url = "https://chatsocket.thesuitchstaging.com:3050/src/Uploads";
+  console.log(`${url}/${tag.fileName}`);
   return (
     <>
       {/* ${sender === type ? "justify-end " : "text-right"}` */}

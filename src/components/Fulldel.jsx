@@ -44,7 +44,8 @@ const Fulldel = ({ username, me, other }) => {
   }, [me, other]);
 
   const handleDelete = () => {
-    socket.emit("delete_room", roomId, me);
+    // {roomId, userId}
+    socket.emit("delete_room", { roomId, userId: me });
   };
 
   return (
