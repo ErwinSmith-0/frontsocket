@@ -7,8 +7,8 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
-  const url = "http://localhost:3050";
-  // http://localhost:3050
+  const url = "https://chatsocket.thesuitchstaging.com:3050";
+  // https://chatsocket.thesuitchstaging.com:3050
   const loginfun = async (e) => {
     e.preventDefault();
     try {

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 
 const Chats = (props) => {
-  const url = "http://localhost:3050";
+  const url = "https://chatsocket.thesuitchstaging.com:3050";
   const { sender, receiver } = props;
   const [typingMsg, setTypingMsg] = useState("");
   const [messages, setMessages] = useState([""]);
@@ -352,7 +352,7 @@ const Fileviewer = (props) => {
   const { tag, type, sender } = props;
 
   const url = "https://chatsocket.thesuitchstaging.com/sio/Uploads";
-  // const url = "http://localhost:3050/src/Uploads";
+  // const url = "https://chatsocket.thesuitchstaging.com:3050/src/Uploads";
   // console.log(`${url}/${tag.fileName}`);
   return (
     <>
