@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/dialog";
 
 const Chats = (props) => {
-  const url = "https://chatsocket.thesuitchstaging.com:3050";
+  const url = "http://localhost:3050";
   const { sender, receiver } = props;
   const [typingMsg, setTypingMsg] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([""]);
   const [typer, setTyper] = useState();
   const [room, setRoom] = useState();
   const [uSender, setuSender] = useState("");
@@ -30,8 +30,6 @@ const Chats = (props) => {
   useEffect(() => {
     socket.on("update_messages", (messages) => {
       setMessages(messages);
-      console.log("messages");
-      console.log(messages);
       setTimeout(() => {
         scrollToBottom();
       }, 500);
@@ -44,54 +42,62 @@ const Chats = (props) => {
     return () => socket.off("update_messages");
   }, []);
 
-  const fetchRoomData = async () => {
-    const roomRes = await fetch(`${url}/api/v1/room`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        sender: sender,
-        receiver: receiver,
-      }),
-    });
-    const roomData = await roomRes.json();
-    const roomId = roomData.data._id;
-    setRoom(roomId);
-
-    const getNames = async () => {
-      const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
+  useEffect(() => {
+    const fetchRoomData = async () => {
+      const roomRes = await fetch(`${url}/api/v1/room`, {
         method: "POST",
-        cache: "no-cache",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          roomId: roomId,
+          sender: sender,
+          receiver: receiver,
         }),
       });
-      return namesRes.json();
+      const roomData = await roomRes.json();
+      console.log(roomData);
+      const roomId = roomData.data._id;
+      setRoom(roomId);
+
+      const getNames = async () => {
+        const namesRes = await fetch(`${url}/api/v1/getsenderreceiver`, {
+          method: "POST",
+          cache: "no-cache",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            roomId: roomId,
+          }),
+        });
+        console.log("namesRes.json()");
+        // console.log(namesRes.json());
+        return namesRes.json();
+      };
+
+      const namesData = await getNames();
+      console.log("namesData");
+      console.log(namesData);
+      const senderId = namesData.data.sender._id;
+      const receiverId = namesData.data.receiver._id;
+      const senderUsername = namesData.data.sender.username;
+      const receiverUsername = namesData.data.receiver.username;
+
+      if (senderId === sender) {
+        setuSender(senderUsername);
+        setuReceiver(receiverUsername);
+      } else {
+        setuReceiver(senderUsername);
+        setuSender(receiverUsername);
+      }
+
+      socket.emit("join_room", roomId);
     };
 
-    const namesData = await getNames();
+    fetchRoomData();
 
-    const senderId = namesData.data.sender._id;
-    const receiverId = namesData.data.receiver._id;
-    const senderUsername = namesData.data.sender.username;
-    const receiverUsername = namesData.data.receiver.username;
-
-    if (senderId === sender) {
-      setuSender(senderUsername);
-      setuReceiver(receiverUsername);
-    } else {
-      setuReceiver(senderUsername);
-      setuSender(receiverUsername);
-    }
-
-    socket.emit("join_room", roomId);
-  };
-
-  fetchRoomData();
+    return () => socket.off("join_room");
+  }, [receiver]);
 
   useEffect(() => {
     socket.on("user_typing", (res) => {
@@ -110,6 +116,7 @@ const Chats = (props) => {
 
   const handleNewMessageSubmit = (e) => {
     e.preventDefault();
+    console.log("newmsg");
     const formData = new FormData(e.currentTarget);
     let data = {
       text: formData.get("message"),
@@ -122,45 +129,46 @@ const Chats = (props) => {
         fileData: formData.get("attachment"),
       },
     };
+
     if (data.attachment.fileName !== "" || data.text !== "") {
-      socket.emit("send_message", data);
+      let message = data;
+      socket.emit("send_message", message);
     }
   };
 
   const handleDelete = (e, msgId) => {
     e.preventDefault();
-    socket.emit("delete_msg", { messageId: msgId, room: room });
+    let messageId = msgId;
+    socket.emit("delete_msg", { messageId, room });
   };
 
   const handleEdit = (e, msgId) => {
     // e.preventDefault();
     if (edit !== "") {
-      // socket.on("edit_msg", async (messageId, room, txt) => {
-      //   console.log("messageId");
-      //   console.log(messageId);
-      //   let MegData = await messageModel.findOneAndUpdate(
-      //     { _id: messageId },
-      //     { text: txt, isEdited: true }
-      //   );
-      //   if (MegData) {
-      //     let foundRoomData = await roomModel
-      //       .findOne({
-      //         _id: room,
-      //       })
-      //       .populate({
-      //         path: "messages",
-      //         populate: {
-      //           path: "attachment",
-      //           model: "fileUpload",
-      //         },
-      //       });
+      socket.on("edit_msg", async (messageId, room, txt) => {
+        let MegData = await messageModel.findOneAndUpdate(
+          { _id: messageId },
+          { text: txt, isEdited: true }
+        );
+        if (MegData) {
+          let foundRoomData = await roomModel
+            .findOne({
+              _id: room,
+            })
+            .populate({
+              path: "messages",
+              populate: {
+                path: "attachment",
+                model: "fileUpload",
+              },
+            });
 
-      //     io.in(room.toString()).emit(
-      //       "update_messages",
-      //       foundRoomData.messages
-      //     );
-      //   }
-      // });
+          io.in(room.toString()).emit(
+            "update_messages",
+            foundRoomData.messages
+          );
+        }
+      });
       socket.emit("edit_msg", { messageId: msgId, room: room, txt: edit });
     }
   };
@@ -305,7 +313,9 @@ const Chats = (props) => {
                 name="message"
                 type="text"
                 onKeyPress={() => {
-                  socket.emit("typing", { roomId: room, typer: uSender });
+                  let roomId = room;
+                  let typer = uSender;
+                  socket.emit("typing", { roomId, typer });
                 }}
                 onBlur={() => {
                   socket.emit("nottyping", room);
@@ -342,8 +352,8 @@ const Fileviewer = (props) => {
   const { tag, type, sender } = props;
 
   const url = "https://chatsocket.thesuitchstaging.com/sio/Uploads";
-  // const url = "https://chatsocket.thesuitchstaging.com:3050/src/Uploads";
-  console.log(`${url}/${tag.fileName}`);
+  // const url = "http://localhost:3050/src/Uploads";
+  // console.log(`${url}/${tag.fileName}`);
   return (
     <>
       {/* ${sender === type ? "justify-end " : "text-right"}` */}

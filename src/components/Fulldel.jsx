@@ -17,7 +17,7 @@ const Fulldel = ({ username, me, other }) => {
   useEffect(() => {
     const fetchRoomData = async () => {
       try {
-        const url = "https://chatsocket.thesuitchstaging.com:3050";
+        const url = "http://localhost:3050";
         const roomRes = await fetch(`${url}/api/v1/room`, {
           method: "POST",
           headers: {
@@ -44,8 +44,8 @@ const Fulldel = ({ username, me, other }) => {
   }, [me, other]);
 
   const handleDelete = () => {
-    // {roomId, userId}
-    socket.emit("delete_room", { roomId, userId: me });
+    let userId = me;
+    socket.emit("delete_room", { roomId, userId });
   };
 
   return (
